@@ -78,8 +78,8 @@ $ ccs
 7d remaining/reset: 38.0% / 2026-07-20 22:00:00
 
 Available Claude accounts:
-  [0] Felix | Pro | 5H:9% (now) | 7D:48% (3D 1h) | used:13h ago
-* [1] david | Pro | 5H:25% (~1h 46min) | 7D:38% (2D 2h) | used:1h ago
+  [0] Alice | Pro | 5H:9% (now) | 7D:48% (3D 1h) | used:13h ago
+* [1] Bob | Pro | 5H:25% (~1h 46min) | 7D:38% (2D 2h) | used:1h ago
 
 Run ccs <index> to make one of these stored entries the active Claude account.
 Run ccs --remove <index> to remove a stored account.
