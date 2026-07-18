@@ -16,6 +16,7 @@ live 文件,从而实现多账号并存与一键切换。
 - **先写 store 再写 live** 的顺序,配合原子写 + 每文件保留最近 3 个备份,避免写坏
 - 切换只改写 `oauthAccount` 与 `claudeAiOauth`,保留两个文件里其它所有字段
 - `usage` 通过 Claude API 拉取 5h / 7d **已用额度**(百分比),带 rate-limit 缓存
+- 列账号时会为**每个**账号刷新过期/将过期的 token,让所有账号都能显示最新的额度与重置时间(不只当前账号)
 - 自带简易 `install` / `uninstall`,配置 Claude 的 hooks / statusline / slash 命令
 - 单文件、按调用名分发(`ccs`/`cc-switch` 列表切换,`ccso`/`cc-sync-oauth` 同步)
 
@@ -172,6 +173,10 @@ Run ccs --remove <index> to remove a stored account.
 
 - 这是一个本地工具,不是官方 Claude 插件;切换时会改写 Claude 的内部 live 文件。
 - 凭证文件写回时沿用「已存在文件的原有权限」;仅当文件不存在时才以 `0600` 新建。
+- **列账号(`ccs` / `ccs usage`)时会刷新所有账号的过期 token**:对每个 access token
+  已过期或即将过期的账号,先用其 refresh token 换取新 token,再拉取用量,并把**轮换后的
+  新 token 回写 store**。这样每个账号显示的额度与重置时间都是最新的,同时也让各账号 token
+  保持有效、减少被迫重新登录。代价是列账号时,对 token 过期的账号会多几次联网请求。
 
 ## License
 
