@@ -154,10 +154,26 @@ SnapshotRefresh refreshStoredUsageSnapshots(json& store, const std::string& curr
   if (!store.contains("accounts") || !store["accounts"].is_array()) return result;
 
   for (auto& entry : store["accounts"]) {
-    const json* creds = jx::member(entry, "credentials");
-    const json* oauth = creds ? jx::member(*creds, "claudeAiOauth") : nullptr;
-    std::string accessToken = oauth ? jx::str(*oauth, "accessToken") : "";
+    if (!entry.contains("credentials") || !entry["credentials"].is_object()) continue;
+    if (!entry["credentials"].contains("claudeAiOauth") ||
+        !entry["credentials"]["claudeAiOauth"].is_object())
+      continue;
+    json oauth = entry["credentials"]["claudeAiOauth"];  // work on a copy
+    std::string accessToken = jx::str(oauth, "accessToken");
     if (accessToken.empty()) continue;
+
+    // Refresh an expired/expiring access token first, so every account reports
+    // fresh usage + reset times — not only the currently-active one. Rotated
+    // tokens are persisted back into the store (the caller writes it out).
+    if (assessCredentials(oauth, nowMillis()).verdict == "need-refresh") {
+      RefreshResult refreshed = refreshTokens(oauth);
+      if (refreshed.ok) {
+        entry["credentials"]["claudeAiOauth"] = refreshed.claudeAiOauth;
+        oauth = refreshed.claudeAiOauth;
+        accessToken = jx::str(oauth, "accessToken");
+        result.changed = true;
+      }
+    }
 
     UsageResult usage = fetchUsage(accessToken);
     std::string key = jx::str(entry, "key");
