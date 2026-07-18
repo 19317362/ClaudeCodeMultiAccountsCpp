@@ -129,15 +129,16 @@ $ ccs
 7d used/reset: 62.0% / 2026-07-20 22:00:00
 
 Available Claude accounts:
-  [0] Alice | Pro | 5H:91% (now) | 7D:52% (3D 1h) | used:13h ago
-* [1] Bob | Pro | 5H:75% (~1h 46min) | 7D:62% (2D 2h) | used:1h ago
+  [0] Alice | Pro | 5H:91% (2026-07-18 21:00:00, ~1h) | 7D:52% (2026-07-21 13:00:00, 3D 1h) | used:13h ago
+* [1] Bob | Pro | 5H:75% (2026-07-18 21:00:00, ~1h 46min) | 7D:62% (2026-07-20 22:00:00, 2D 2h) | used:1h ago
 
 Run ccs <index> to make one of these stored entries the active Claude account.
 Run ccs --remove <index> to remove a stored account.
 ```
 
 其中 `5H` / `7D` 列显示的是 5 小时 / 7 天窗口的**已用**百分比(用得越多颜色越靠红),
-括号里是该窗口的重置倒计时;行尾 `used:` 是该账号上次被选用的相对时间。
+括号里是该窗口的重置**绝对时间**(`yyyy-mm-dd hh:mm:ss`,后附到期倒计时);窗口无用量、
+无重置时显示 `?`。行尾 `used:` 是该账号上次被选用的相对时间。
 
 在 Claude chat shell 里也可用 `!ccs` / `!cc-switch` / `!cc-sync-oauth`。
 

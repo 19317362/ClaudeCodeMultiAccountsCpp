@@ -216,18 +216,25 @@ static std::string formatUsagePercentPtr(const json* window) {
   return text;
 }
 
-static std::string formatDurationUntil(long long millis) {
+// Absolute reset time (local, yyyy-mm-dd hh:mm:ss); "?" when the window has no
+// active reset. A short relative hint is appended while the reset is still in
+// the future, e.g. "2026-07-21 13:00:00, 3D 1h" (the caller wraps it in ()).
+static std::string formatResetTime(long long millis) {
   if (millis < 0) return "?";
+  std::string out = formatLocalDateTime(millis);
   long long diff = millis - nowMillis();
-  if (diff <= 0) return "now";
-  long long totalHours = diff / 3600000;
-  if (totalHours >= 24) {
-    long long days = totalHours / 24;
-    long long hours = totalHours % 24;
-    return std::to_string(days) + "D " + std::to_string(hours) + "h";
+  if (diff > 0) {
+    long long totalHours = diff / 3600000;
+    std::string rel;
+    if (totalHours >= 24) {
+      rel = std::to_string(totalHours / 24) + "D " + std::to_string(totalHours % 24) + "h";
+    } else {
+      long long minutes = (diff % 3600000) / 60000;
+      rel = "~" + std::to_string(totalHours) + "h " + std::to_string(minutes) + "min";
+    }
+    out += ", " + rel;
   }
-  long long minutes = (diff % 3600000) / 60000;
-  return "~" + std::to_string(totalHours) + "h " + std::to_string(minutes) + "min";
+  return out;
 }
 
 std::string getUsageColumns(const json& entry) {
@@ -244,7 +251,7 @@ std::string getUsageColumns(const json& entry) {
     std::string iso = jx::str(*five, "resets_at");
     if (!iso.empty()) fiveResetMs = parseIsoMillis(iso);
   }
-  std::string fiveHourReset = formatDurationUntil(fiveResetMs);
+  std::string fiveHourReset = formatResetTime(fiveResetMs);
 
   std::string sevenDayPct = formatUsagePercentPtr(seven);
   long long sevenResetMs = rateLimitReset;
@@ -252,7 +259,7 @@ std::string getUsageColumns(const json& entry) {
     std::string iso = jx::str(*seven, "resets_at");
     if (!iso.empty()) sevenResetMs = parseIsoMillis(iso);
   }
-  std::string sevenDayReset = formatDurationUntil(sevenResetMs);
+  std::string sevenDayReset = formatResetTime(sevenResetMs);
 
   return "5H:" + fiveHourPct + " (" + fiveHourReset + ") | 7D:" + sevenDayPct + " (" +
          sevenDayReset + ")";
