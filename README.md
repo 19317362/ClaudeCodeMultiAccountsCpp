@@ -55,6 +55,56 @@ ldd build/linux/x86_64/release/ccs   # 只应看到 libc/libstdc++/libm/libgcc,�
 
 确保 `~/.local/bin` 在 `PATH` 中。卸载:`ccs uninstall`(保留已存账号快照)。
 
+## 快速上手:从零开始添加 Alice / Bob 两个账号
+
+`ccs` 只能捕获**当前已登录**的账号,所以「添加账号」= 依次登录每个账号,并在登录后
+把它同步进 store。安装时注册的 `auth_success` 钩子会在每次登录成功后自动执行
+`ccs sync`;若没安装钩子,手动运行 `ccso`(等价于 `ccs sync`)即可。
+
+```text
+# 前置:已构建并 `ccs install`,~/.local/bin 在 PATH 中
+```
+
+1. **登录第一个账号(Alice)**
+   在 Claude Code 里执行 `/login`,用 Alice 的账号完成 OAuth 登录。
+   - 已装钩子:登录成功后自动同步。
+   - 未装钩子:手动执行一次 `ccso`。
+
+   此时 `ccs` 应能看到:
+   ```text
+   Available Claude accounts:
+   * [0] Alice | Pro | ... | used:just now
+   ```
+
+2. **登录第二个账号(Bob)**
+   再次执行 `/login`,这次用 Bob 的账号登录(会覆盖 live 文件,指向 Bob)。
+   同样自动同步,或手动 `ccso`。
+
+   现在两个账号都在 store 里:
+   ```text
+   $ ccs
+   Available Claude accounts:
+     [0] Alice | Pro | ... | used:5m ago
+   * [1] Bob   | Pro | ... | used:just now
+   ```
+
+3. **来回切换**
+   ```bash
+   ccs 0     # 切回 Alice
+   ccs 1     # 切到 Bob
+   ```
+   切换后按提示 **重启 Claude Code** 使账号变更生效。
+
+4. **(可选)起别名**
+   列表里显示的是账号自身的 display name。若两个账号重名或想自定义,用别名区分:
+   ```bash
+   ccs --rename 0 Personal
+   ccs --rename 1 Work
+   ```
+
+> 提示:第一次装好后,若你当前已登录了某个账号,直接 `ccso` 就能把它作为
+> 「第一个账号」收进来,再 `/login` 换第二个账号即可,无需重复登录第一个。
+
 ## 用法
 
 ```bash
