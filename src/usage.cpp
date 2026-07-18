@@ -53,11 +53,12 @@ UsageResult fetchUsage(const std::string& accessToken) {
 
 // ---------------------------- top usage block ------------------------------
 
-static std::string remainingPct(const json& window) {
+// utilization is the used fraction; show it directly (used, not remaining).
+static std::string usedPct(const json& window) {
   if (jx::isFiniteNum(window, "utilization")) {
     double util = jx::num(window, "utilization", 0);
     char buf[16];
-    std::snprintf(buf, sizeof(buf), "%.1f", 100.0 - util);
+    std::snprintf(buf, sizeof(buf), "%.1f", util);
     return buf;
   }
   return "N/A";
@@ -91,7 +92,7 @@ std::vector<std::string> formatUsageInfo(const UsageResult& usage) {
       long long ms = parseIsoMillis(iso);
       if (ms > 0) resetsAt = formatLocalDateTime(ms);
     }
-    lines.push_back("5h remaining/reset: " + remainingPct(*five) + "% / " + resetsAt);
+    lines.push_back("5h used/reset: " + usedPct(*five) + "% / " + resetsAt);
   }
   const json* seven = jx::member(usage.data, "seven_day");
   if (seven) {
@@ -101,7 +102,7 @@ std::vector<std::string> formatUsageInfo(const UsageResult& usage) {
       long long ms = parseIsoMillis(iso);
       if (ms > 0) resetsAt = formatLocalDateTime(ms);
     }
-    lines.push_back("7d remaining/reset: " + remainingPct(*seven) + "% / " + resetsAt);
+    lines.push_back("7d used/reset: " + usedPct(*seven) + "% / " + resetsAt);
   }
   if (lines.empty()) lines.push_back("No usage data available for this account.");
   return lines;
@@ -185,15 +186,17 @@ SnapshotRefresh refreshStoredUsageSnapshots(json& store, const std::string& curr
 
 // ---------------------------- column formatting ----------------------------
 
+// Show the used percentage (utilization) directly. Colors escalate with usage:
+// red once heavily used, yellow past the halfway mark.
 static std::string formatUsagePercentPtr(const json* window) {
   if (!window || !jx::isFiniteNum(*window, "utilization")) return "?";
   double value = jx::num(*window, "utilization", 0);
-  long remaining = (long)std::lround(100.0 - value);
-  if (remaining < 0) remaining = 0;
-  if (remaining > 100) remaining = 100;
-  std::string text = std::to_string(remaining) + "%";
-  if (remaining <= 10) return colorize(text, "31");
-  if (remaining <= 50) return colorize(text, "33");
+  long used = (long)std::lround(value);
+  if (used < 0) used = 0;
+  if (used > 100) used = 100;
+  std::string text = std::to_string(used) + "%";
+  if (used >= 90) return colorize(text, "31");
+  if (used >= 50) return colorize(text, "33");
   return text;
 }
 

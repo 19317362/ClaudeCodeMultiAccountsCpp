@@ -15,7 +15,7 @@ live 文件,从而实现多账号并存与一键切换。
 - 切换前:检测运行中的 `claude` 进程、按需刷新即将过期的 OAuth token(联网)
 - **先写 store 再写 live** 的顺序,配合原子写 + 每文件保留最近 3 个备份,避免写坏
 - 切换只改写 `oauthAccount` 与 `claudeAiOauth`,保留两个文件里其它所有字段
-- `usage` 通过 Claude API 拉取 5h / 7d 剩余额度,带 rate-limit 缓存
+- `usage` 通过 Claude API 拉取 5h / 7d **已用额度**(百分比),带 rate-limit 缓存
 - 自带简易 `install` / `uninstall`,配置 Claude 的 hooks / statusline / slash 命令
 - 单文件、按调用名分发(`ccs`/`cc-switch` 列表切换,`ccso`/`cc-sync-oauth` 同步)
 
@@ -124,16 +124,19 @@ ccs --version          # 显示版本
 ```text
 $ ccs
 --- Usage ---
-5h remaining/reset: 25.0% / 2026-07-18 21:00:00
-7d remaining/reset: 38.0% / 2026-07-20 22:00:00
+5h used/reset: 75.0% / 2026-07-18 21:00:00
+7d used/reset: 62.0% / 2026-07-20 22:00:00
 
 Available Claude accounts:
-  [0] Alice | Pro | 5H:9% (now) | 7D:48% (3D 1h) | used:13h ago
-* [1] Bob | Pro | 5H:25% (~1h 46min) | 7D:38% (2D 2h) | used:1h ago
+  [0] Alice | Pro | 5H:91% (now) | 7D:52% (3D 1h) | used:13h ago
+* [1] Bob | Pro | 5H:75% (~1h 46min) | 7D:62% (2D 2h) | used:1h ago
 
 Run ccs <index> to make one of these stored entries the active Claude account.
 Run ccs --remove <index> to remove a stored account.
 ```
+
+其中 `5H` / `7D` 列显示的是 5 小时 / 7 天窗口的**已用**百分比(用得越多颜色越靠红),
+括号里是该窗口的重置倒计时;行尾 `used:` 是该账号上次被选用的相对时间。
 
 在 Claude chat shell 里也可用 `!ccs` / `!cc-switch` / `!cc-sync-oauth`。
 
