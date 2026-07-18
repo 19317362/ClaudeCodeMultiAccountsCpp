@@ -1,3 +1,7 @@
+# xmake build output and cache
+build/
+.xmake/
+
+# editor / agent scratch
 .agents/
 .bkit/
-Src/

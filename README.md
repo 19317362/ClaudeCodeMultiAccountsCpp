@@ -1,187 +1,125 @@
-# Claude Code Multi-Account Switcher
+# Claude Code Multi-Account Switcher (C++)
 
-[![npm version](https://img.shields.io/npm/v/claude-code-multi-accounts?label=npm)](https://www.npmjs.com/package/claude-code-multi-accounts)
-[![npm downloads](https://img.shields.io/npm/dm/claude-code-multi-accounts)](https://www.npmjs.com/package/claude-code-multi-accounts)
+`ccs` 是一个用于在多个 Claude Code OAuth 账号之间切换的命令行工具。它把每个账号的
+快照保存在 `~/.ClaudeCodeMultiAccounts.json`,切换时只把选中的账号写回 Claude 的
+live 文件,从而实现多账号并存与一键切换。
 
-This project installs a local workaround for switching Claude Code OAuth accounts by keeping account snapshots in `~/.ClaudeCodeMultiAccounts.json` and writing only the active account back into Claude's live files when switching.
+本仓库是该工具的 **C++ 实现**:用 [xmake](https://xmake.io) 构建,第三方依赖
+(`nlohmann_json`、`libcurl`、`openssl`)通过 xrepo 拉取并**静态链接**,
+**编译产物是单个可执行文件**,只依赖系统的 glibc / libstdc++——不需要 Node.js,
+也不用往 `~/.claude` 里铺一整套脚本。
 
-Supported user-facing commands:
-- `cc-switch`
-- `cc-switch <index>`
-- `cc-sync-oauth`
-- `ccs` (short alias for `cc-switch`)
-- `ccso` (short alias for `cc-sync-oauth`)
-- `/cc-switch`
-- `/cc-sync-oauth`
+## 特性
 
-Supported environments:
-- Windows (PowerShell/CMD/Git Bash)
-- Ubuntu WSL
-- Native macOS/Linux with Node.js
-- Claude chat shell mode via `!cc-switch` and `!cc-sync-oauth`
+- 列出、切换、同步、删除、重命名(别名)已保存的账号
+- 切换前:检测运行中的 `claude` 进程、按需刷新即将过期的 OAuth token(联网)
+- **先写 store 再写 live** 的顺序,配合原子写 + 每文件保留最近 3 个备份,避免写坏
+- 切换只改写 `oauthAccount` 与 `claudeAiOauth`,保留两个文件里其它所有字段
+- `usage` 通过 Claude API 拉取 5h / 7d 剩余额度,带 rate-limit 缓存
+- 自带简易 `install` / `uninstall`,配置 Claude 的 hooks / statusline / slash 命令
+- 单文件、按调用名分发(`ccs`/`cc-switch` 列表切换,`ccso`/`cc-sync-oauth` 同步)
 
-Prerequisites:
-- Node.js 18+
-- Claude Code already installed and logged in at least once
+## 前置条件
 
-Install:
+- Linux,glibc / libstdc++(编译期需要)
+- [xmake](https://xmake.io)(会自动用 xrepo 拉取并从源码编译 openssl + libcurl)
+- 已安装并至少登录过一次 Claude Code
 
-**Recommended (via npm):**
-
-```bash
-npx claude-code-multi-accounts install
-```
-
-**Manual (from source):**
+## 构建
 
 ```bash
-git clone https://github.com/Leuconoe/ClaudeCodeMultiAccounts.git
-cd ClaudeCodeMultiAccounts
-./install.cmd   # Windows
-./install.sh    # macOS / Linux / WSL
+xmake            # 首次会用 xrepo 下载并编译 openssl + libcurl(几分钟)
 ```
 
-What install does:
-- copies the Node CLI into `~/.claude/multi-account-switch/bin`
-- installs `cc-switch`, `cc-sync-oauth`, `ccs`, and `ccso` wrapper commands
-- keeps stored account snapshots in `~/.ClaudeCodeMultiAccounts.json`
-- adds an `auth_success` hook entry to `~/.claude/settings.json`
-- adds a `SessionStart` reminder hook to `~/.claude/settings.json`
-- if `statusLine.command` already exists, wraps it and prepends `use !cc-switch / !ccs` to the existing HUD output
-- installs global Claude command wrappers in `~/.claude/commands`
-- creates backups under `~/.claude/backups/multi-account-switch-installer`
-
-Uninstall:
-
-**Recommended (via npm):**
+产物:`build/linux/x86_64/release/ccs`(约 4.7MB,单文件)。
 
 ```bash
-npx claude-code-multi-accounts uninstall
+ldd build/linux/x86_64/release/ccs   # 只应看到 libc/libstdc++/libm/libgcc,无 curl/ssl
 ```
 
-**Manual (from source):**
-
-```powershell
-./uninstall.cmd   # Windows
-```
+## 安装
 
 ```bash
-./uninstall.sh    # macOS / Linux / WSL
+./build/linux/x86_64/release/ccs install
 ```
 
-Usage:
+`install` 会:
+
+- 把二进制复制到 `~/.claude/multi-account-switch/bin/ccs`
+- 在 `~/.local/bin` 放置 `cc-switch` / `ccs` / `cc-sync-oauth` / `ccso` 四个同一二进制的副本
+  (按调用名分发:`cc-sync-oauth`、`ccso` 默认执行 sync,其余执行 list/switch)
+- 在 `~/.claude/settings.json` 写入 `auth_success`(sync)、`SessionStart startup`
+  (session-start)钩子与 `statusLine`;若已有 statusline 命令,会保存为下游透传目标
+- 在 `~/.claude/commands` 写入 `/cc-switch`、`/cc-sync-oauth` slash 命令
+- 写入前对 `settings.json` 做备份
+
+确保 `~/.local/bin` 在 `PATH` 中。卸载:`ccs uninstall`(保留已存账号快照)。
+
+## 用法
 
 ```bash
-cc-switch
-cc-switch 1
-cc-switch --rename 1 Personal
-cc-switch --rename 1
-cc-sync-oauth
-ccs
-ccso
+ccs                    # 列出账号(带 usage)
+ccs 1                  # 切换到 index 1
+ccs sync               # 把当前 live 账号写入 store
+ccs usage              # 拉取当前账号用量
+ccs --remove 2         # 删除某个已存账号
+ccs --rename 1 Work    # 设置别名;省略名字则清除
+ccs --hide-usage       # 关闭列表里的 usage 显示(--show-usage 打开)
+ccs --help             # 显示用法
+ccs --version          # 显示版本
 ```
 
-`cc-switch --rename <index> <name>` sets a custom label for a stored account
-(handy when several accounts share the same Claude display name). The alias
-survives syncs. Omit `<name>` to clear it and fall back to the account's display
-name.
-
-Example shell output:
+示例输出:
 
 ```text
-$ cc-switch
+$ ccs
 --- Usage ---
-5h remaining/reset: 78.0% / 2026. 4. 22. 2:00 PM
-7d remaining/reset: 94.0% / 2026. 4. 24. 9:00 AM
+5h remaining/reset: 25.0% / 2026-07-18 21:00:00
+7d remaining/reset: 38.0% / 2026-07-20 22:00:00
 
 Available Claude accounts:
-* [0] Alex Example | Pro | 5H:78%(~2h 44min) | 7D:94%(1D 21h) | used:3m ago
-  [1] Taylor Example | Team Std | 5H:71%(now) | 7D:81%(1D 21h) | used:19h ago
-  [2] Jordan Example | Team Prem | 5H:0%(now) | 7D:65%(2D 5h) | used:1d ago
+  [0] Felix | Pro | 5H:9% (now) | 7D:48% (3D 1h) | used:13h ago
+* [1] david | Pro | 5H:25% (~1h 46min) | 7D:38% (2D 2h) | used:1h ago
 
-Run cc-switch <index> to make one of these stored entries the active Claude account.
-Run cc-switch --remove <index> to remove a stored account.
+Run ccs <index> to make one of these stored entries the active Claude account.
+Run ccs --remove <index> to remove a stored account.
 ```
 
-```text
-$ cc-switch 1
-Switched active account to [1] Taylor Example <taylor@example.invalid> (Teams).
+在 Claude chat shell 里也可用 `!ccs` / `!cc-switch` / `!cc-sync-oauth`。
 
-Stored account list:
-  [0] Alex Example | Pro | 5H:78%(?) | 7D:94%(?) | used:19m ago
-* [1] Taylor Example | Team Std | 5H:71%(?) | 7D:81%(?) | used:just now
-  [2] Jordan Example | Team Prem | 5H:0%(?) | 7D:65%(?) | used:1d ago
-```
+## 文件与数据
 
-Output columns:
-- `5H`: Current or cached 5-hour remaining quota and reset estimate
-- `7D`: Current or cached 7-day remaining quota and reset estimate
-- `used`: When the account was last selected, or when Claude startup refreshed the active account marker
-- Top usage block: live `5h remaining/reset` and `7d remaining/reset` values fetched from Claude when available
+| 路径 | 用途 |
+| --- | --- |
+| `~/.claude.json` | Claude live 配置(读写 `oauthAccount`) |
+| `~/.claude/.credentials.json` | Claude live 凭证(读写 `claudeAiOauth`) |
+| `~/.ClaudeCodeMultiAccounts.json` | 本工具的账号快照存储 |
+| `~/.claude/multi-account-switch/settings.json` | 工具设置(`showUsage`、`rateLimitResetAt`) |
+| `~/.claude/backups/multi-account-switch/` | 写 live/store 前的备份 |
 
-Claude chat shell usage:
+## 源码结构
 
-```bash
-!cc-switch
-!cc-switch 1
-!cc-sync-oauth
-!ccs
-!ccso
-```
+单一二进制,按职责拆分为多个 `.cpp`(全部声明集中在 `src/ccs.hpp`):
 
-Claude `/command` usage:
+| 文件 | 职责 |
+| --- | --- |
+| `src/paths.cpp` | 默认路径、`jx::` JSON 取值助手、文件系统 |
+| `src/timefmt.cpp` | ISO 时间解析/格式化(对齐 JS `Date`) |
+| `src/store.cpp` | JSON 读写、原子写、备份、live/store 落盘、工具设置 |
+| `src/accounts.cpp` | 账号 key、store 同步、选择、凭证守卫 |
+| `src/http.cpp` | libcurl 封装(POST/GET) |
+| `src/auth.cpp` | OAuth token 刷新 |
+| `src/usage.cpp` | 用量 API、快照、列格式化 |
+| `src/output.cpp` | 显示名、套餐推断、汇总、消息、颜色 |
+| `src/actions.cpp` | list/switch/sync/usage/remove/rename 主流程、进程检测 |
+| `src/install.cpp` | install / uninstall / session-start / statusline |
+| `src/main.cpp` | 参数解析与分发 |
 
-```text
-/cc-switch
-/cc-switch 1
-/cc-sync-oauth
-```
+## 说明
 
-`/cc-switch` currently still goes through Claude's command-processing path, so `!cc-switch` remains the primary deterministic execution path. The slash command is installed now so it can benefit from future improvements in Claude's command handling.
+- 这是一个本地工具,不是官方 Claude 插件;切换时会改写 Claude 的内部 live 文件。
+- 凭证文件写回时沿用「已存在文件的原有权限」;仅当文件不存在时才以 `0600` 新建。
 
-Claude startup reminder:
+## License
 
-```text
-Claude Code Multi-Account Switcher is available.
-Use !cc-switch or !ccs to list/switch accounts.
-Use !cc-sync-oauth or !ccso to sync the active account into oauthList.
-```
-
-Platform notes:
-- Windows installs `cc-switch.cmd` and `cc-sync-oauth.cmd` into `~/bin`, plus Git Bash-friendly `cc-switch` and `cc-sync-oauth` wrappers in the same directory.
-- Short aliases `ccs` and `ccso` are installed alongside the full command names.
-- Native macOS/Linux installs commands into `~/.local/bin`.
-- WSL also uses the Unix shell wrappers.
-- If a shell says `command not found` right after install, restart the shell or run `hash -r` once.
-
-Behavior notes:
-- The tool stores metadata and credential snapshots in `~/.ClaudeCodeMultiAccounts.json`.
-- `cc-sync-oauth` imports the current live account into that store.
-- Switching writes only the active `oauthAccount` back into `~/.claude.json` and the active credential snapshot back into `~/.claude/.credentials.json`.
-- It creates backups before writing live files or the store file.
-- Stored account ordering is stable.
-- If a stored `displayName` is already corrupted, output falls back to the email local part.
-- The displayed plan type is a best-effort inference from the available account fields and credential snapshot.
-- The `reset:` column shows rate limit countdown for the current account, or a 7-day window estimate for others.
-- Usage info from the Claude API is shown before the account list when rate limited.
-
-Warnings:
-- This is a local workaround, not an official Claude plugin.
-- It still mutates internal Claude live files when switching accounts, but it no longer uses `~/.claude.json` as the primary multi-account store.
-- Native macOS/Linux support is implemented, but still needs real-host validation beyond Windows/WSL testing.
-- npm packaging is prepared, but npm registry publish still requires npm authentication.
-
-After this:
-- npm / `npx` release refresh for `v0.3.7`
-- non-AI hook execution path for `/cc-switch` if Claude exposes a direct command hook in the future
-- improve plan type detection beyond the current best-effort inference
-
-## Star History
-
-<a href="https://www.star-history.com/?repos=Leuconoe%2FClaudeCodeMultiAccounts&type=date&legend=top-left">
- <picture>
-   <source media="(prefers-color-scheme: dark)" srcset="https://api.star-history.com/image?repos=Leuconoe/ClaudeCodeMultiAccounts&type=date&theme=dark&legend=top-left" />
-   <source media="(prefers-color-scheme: light)" srcset="https://api.star-history.com/image?repos=Leuconoe/ClaudeCodeMultiAccounts&type=date&legend=top-left" />
-   <img alt="Star History Chart" src="https://api.star-history.com/image?repos=Leuconoe/ClaudeCodeMultiAccounts&type=date&legend=top-left" />
- </picture>
-</a>
+MIT,见 [LICENSE](LICENSE)。
