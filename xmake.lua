@@ -21,9 +21,11 @@ end
 -- statically, so the produced binary does not depend on whichever libcurl /
 -- TLS flavor happens to be installed on the host — the goal is a single,
 -- self-contained executable.
+-- libcurl is pinned: 8.21.0+ requires OpenSSL 3.x (OPENSSL_VERSION_STRING),
+-- which does not build against the 1.1.1 series resolved above.
 add_requires("nlohmann_json")
 add_requires("openssl", {system = false})
-add_requires("libcurl", {system = false, configs = {openssl = true}})
+add_requires("libcurl 8.11.0", {system = false, configs = {openssl = true}})
 
 target("ccs")
     set_kind("binary")
