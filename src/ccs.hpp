@@ -143,7 +143,8 @@ RefreshResult refreshTokens(const json& claudeAiOauth);
 struct UsageResult { bool ok = false; bool rateLimited = false; long retryAfter = -1; json data; std::string error; };
 UsageResult fetchUsage(const std::string& accessToken);
 std::vector<std::string> formatUsageInfo(const UsageResult& usage);
-// Refreshes usageSnapshot on each account with a token. Returns current-account usage.
+// Fetches usage with existing access tokens only; OAuth refresh is switch-only.
+// Updates usageSnapshot and returns current-account usage when available.
 struct SnapshotRefresh { UsageResult currentUsage; bool hasCurrent = false; bool changed = false; };
 SnapshotRefresh refreshStoredUsageSnapshots(json& store, const std::string& currentKey);
 std::string getUsageColumns(const json& entry);

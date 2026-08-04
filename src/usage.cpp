@@ -158,23 +158,16 @@ SnapshotRefresh refreshStoredUsageSnapshots(json& store, const std::string& curr
     if (!entry["credentials"].contains("claudeAiOauth") ||
         !entry["credentials"]["claudeAiOauth"].is_object())
       continue;
-    json oauth = entry["credentials"]["claudeAiOauth"];  // work on a copy
+    const json& oauth = entry["credentials"]["claudeAiOauth"];
     std::string accessToken = jx::str(oauth, "accessToken");
     if (accessToken.empty()) continue;
 
-    // Refresh an expired/expiring access token first, so every account reports
-    // fresh usage + reset times — not only the currently-active one. Rotated
-    // tokens are persisted back into the store (the caller writes it out).
-    if (assessCredentials(oauth, nowMillis()).verdict == "need-refresh") {
-      RefreshResult refreshed = refreshTokens(oauth);
-      if (refreshed.ok) {
-        entry["credentials"]["claudeAiOauth"] = refreshed.claudeAiOauth;
-        oauth = refreshed.claudeAiOauth;
-        accessToken = jx::str(oauth, "accessToken");
-        result.changed = true;
-      }
-    }
-
+    // Usage reads must not refresh OAuth tokens. Refresh tokens are rotated and
+    // single-use; refreshing the live account here would leave Claude Code with
+    // an invalid old token, while batching inactive-account refreshes risks
+    // losing the only valid token before the store is durably written. Token
+    // refresh therefore belongs exclusively to the switch pipeline, which
+    // persists the selected slot before replacing the live credentials.
     UsageResult usage = fetchUsage(accessToken);
     std::string key = jx::str(entry, "key");
     bool isCurrent = (key == currentKey);

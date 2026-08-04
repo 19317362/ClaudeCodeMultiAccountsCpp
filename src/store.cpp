@@ -64,12 +64,17 @@ void writeJsonAtomic(const std::string& path, const json& value, int mode) {
     if (ec) throw std::runtime_error("rename failed");
   } catch (...) {
     // Fall back to a direct overwrite; the temp file must never linger because
-    // it may contain tokens.
+    // it may contain tokens. Unlike the rename attempt, failure of this final
+    // write must reach the caller: silently continuing could leave account
+    // metadata and live credentials out of sync.
     std::error_code ec;
     fs::remove(tempPath, ec);
     std::ofstream out(path, std::ios::binary | std::ios::trunc);
+    if (!out) throw std::runtime_error("cannot write " + path);
     out << payload;
+    if (!out) throw std::runtime_error("write failed " + path);
     out.close();
+    if (!out) throw std::runtime_error("close failed " + path);
     if (effectiveMode > 0) ::chmod(path.c_str(), effectiveMode);
   }
 }

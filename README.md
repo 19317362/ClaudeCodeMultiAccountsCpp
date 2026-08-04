@@ -174,10 +174,9 @@ Run ccs --remove <index> to remove a stored account.
 
 - 这是一个本地工具,不是官方 Claude 插件;切换时会改写 Claude 的内部 live 文件。
 - 凭证文件写回时沿用「已存在文件的原有权限」;仅当文件不存在时才以 `0600` 新建。
-- **列账号(`ccs` / `ccs usage`)时会刷新所有账号的过期 token**:对每个 access token
-  已过期或即将过期的账号,先用其 refresh token 换取新 token,再拉取用量,并把**轮换后的
-  新 token 回写 store**。这样每个账号显示的额度与重置时间都是最新的,同时也让各账号 token
-  保持有效、减少被迫重新登录。代价是列账号时,对 token 过期的账号会多几次联网请求。
+- 列账号(`ccs` / `ccs usage`)只使用现有 access token 查询用量,不会刷新或轮换 OAuth token。
+  access token 已失效的账号会保留上次的用量快照;选择切换到该账号时,工具才会刷新 token,
+  先把轮换后的 token 写入 store,再替换 Claude live 凭证,避免破坏 Claude Code 当前登录状态。
 
 ## License
 
