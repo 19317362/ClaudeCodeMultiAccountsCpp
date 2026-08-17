@@ -22,7 +22,7 @@ live 文件,从而实现多账号并存与一键切换。
 
 ## 前置条件
 
-- Linux,glibc / libstdc++(编译期需要)
+- Linux(glibc / libstdc++)或 macOS(Xcode Command Line Tools)
 - [xmake](https://xmake.io)(会自动用 xrepo 拉取并从源码编译 openssl + libcurl)
 - 已安装并至少登录过一次 Claude Code
 
@@ -32,10 +32,37 @@ live 文件,从而实现多账号并存与一键切换。
 xmake            # 首次会用 xrepo 下载并编译 openssl + libcurl(几分钟)
 ```
 
-产物:`build/linux/x86_64/release/ccs`(约 4.7MB,单文件)。
+产物是单个可执行文件,路径随平台:
+
+| 平台 | 产物 | 大小 |
+| --- | --- | --- |
+| Linux x86_64 | `build/linux/x86_64/release/ccs` | 约 4.7MB |
+| macOS arm64 | `build/macosx/arm64/release/ccs` | 约 3.5MB |
+
+验证第三方依赖确实静态链接进去了:
 
 ```bash
-ldd build/linux/x86_64/release/ccs   # 只应看到 libc/libstdc++/libm/libgcc,无 curl/ssl
+ldd    build/linux/x86_64/release/ccs   # Linux:只应看到 libc/libstdc++/libm/libgcc,无 curl/ssl
+otool -L build/macosx/arm64/release/ccs # macOS:只应看到系统库与 Security/CoreFoundation,无 curl/ssl
+```
+
+### macOS 上的差异:凭证存在 Keychain
+
+Claude Code 在 macOS 上**不写 `~/.claude/.credentials.json`**,而是把同一份
+JSON(`{"claudeAiOauth": {...}}`)存进 login Keychain 的一条 generic password,
+service 名为 `Claude Code-credentials`。因此 `ccs` 在 macOS 上通过
+Security framework 读写 Keychain(见 `src/creds.cpp`),其余逻辑与 Linux 完全一致。
+
+- 首次读写 Keychain 时,macOS 可能弹窗要求授权;选 **总是允许** 即可免除后续提示。
+- 切换前会把 Keychain 里的旧值快照到
+  `~/.claude/backups/multi-account-switch/.credentials.keychain.json.<时间戳>.bak`(0600),
+  与 Linux 备份 `.credentials.json` 的行为对等。
+- 传 `--credentials <路径>` 会强制改用文件后端(便于检查或测试),不再碰 Keychain。
+
+只想在终端里手动用、不需要 Claude 集成时,跳过下面的 `install`,直接跑二进制或做个软链:
+
+```bash
+ln -sf "$PWD/build/macosx/arm64/release/ccs" ~/.local/bin/ccs   # 确保 ~/.local/bin 在 PATH 中
 ```
 
 ## 安装
@@ -147,7 +174,8 @@ Run ccs --remove <index> to remove a stored account.
 | 路径 | 用途 |
 | --- | --- |
 | `~/.claude.json` | Claude live 配置(读写 `oauthAccount`) |
-| `~/.claude/.credentials.json` | Claude live 凭证(读写 `claudeAiOauth`) |
+| `~/.claude/.credentials.json` | Claude live 凭证(读写 `claudeAiOauth`)—— **仅 Linux** |
+| Keychain `Claude Code-credentials` | Claude live 凭证 —— **仅 macOS**,内容同上 |
 | `~/.ClaudeCodeMultiAccounts.json` | 本工具的账号快照存储 |
 | `~/.claude/multi-account-switch/settings.json` | 工具设置(`showUsage`、`rateLimitResetAt`) |
 | `~/.claude/backups/multi-account-switch/` | 写 live/store 前的备份 |
@@ -161,6 +189,7 @@ Run ccs --remove <index> to remove a stored account.
 | `src/paths.cpp` | 默认路径、`jx::` JSON 取值助手、文件系统 |
 | `src/timefmt.cpp` | ISO 时间解析/格式化(对齐 JS `Date`) |
 | `src/store.cpp` | JSON 读写、原子写、备份、live/store 落盘、工具设置 |
+| `src/creds.cpp` | live 凭证后端:Linux 走文件,macOS 走 Keychain |
 | `src/accounts.cpp` | 账号 key、store 同步、选择、凭证守卫 |
 | `src/http.cpp` | libcurl 封装(POST/GET) |
 | `src/auth.cpp` | OAuth token 刷新 |
@@ -173,7 +202,9 @@ Run ccs --remove <index> to remove a stored account.
 ## 说明
 
 - 这是一个本地工具,不是官方 Claude 插件;切换时会改写 Claude 的内部 live 文件。
-- 凭证文件写回时沿用「已存在文件的原有权限」;仅当文件不存在时才以 `0600` 新建。
+- 凭证文件与 store(`~/.ClaudeCodeMultiAccounts.json`)都以 `0600` 写入 —— 两者都存着明文
+  access / refresh token,不能对同组或其他用户可读;旧版本留下的 `0644` store 会在下次写入时收紧。
+  反之,对本工具不拥有的文件(`~/.claude.json`)只沿用其原有权限,绝不放宽。
 - 列账号(`ccs` / `ccs usage`)只使用现有 access token 查询用量,不会刷新或轮换 OAuth token。
   access token 已失效的账号会保留上次的用量快照;选择切换到该账号时,工具才会刷新 token,
   先把轮换后的 token 写入 store,再替换 Claude live 凭证,避免破坏 Claude Code 当前登录状态。

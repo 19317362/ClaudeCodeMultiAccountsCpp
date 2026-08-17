@@ -81,7 +81,7 @@ IdentityCheck verifyLiveIdentity(const json& config, const json& credentials, co
   std::string access = oauth ? jx::str(*oauth, "accessToken") : "";
   std::string refresh = oauth ? jx::str(*oauth, "refreshToken") : "";
   if (!oauth || access.empty() || refresh.empty()) {
-    return {false, "The Claude credentials file has no usable claudeAiOauth tokens."};
+    return {false, "The Claude credentials have no usable claudeAiOauth tokens."};
   }
   std::string liveKey = getAccountKey(config.at("oauthAccount"));
   if (store.contains("accounts") && store["accounts"].is_array()) {
@@ -109,7 +109,7 @@ SyncResult syncStoreFromLive(const json& store, const json& config, const json& 
     throw std::runtime_error("The Claude config does not contain oauthAccount.");
   }
   if (!jx::has(credentials, "claudeAiOauth")) {
-    throw std::runtime_error("The Claude credentials file does not contain claudeAiOauth.");
+    throw std::runtime_error("The Claude credentials do not contain claudeAiOauth.");
   }
 
   std::string key = getAccountKey(config.at("oauthAccount"));

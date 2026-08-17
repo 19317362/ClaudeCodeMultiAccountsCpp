@@ -63,6 +63,10 @@ struct Options {
   std::string usageCommand = "/switch";
   std::string configPath;
   std::string credentialsPath;
+  // Set when --credentials named a file explicitly. On macOS the live
+  // credentials live in the Keychain, so the file backend is only used when the
+  // caller asked for a specific path.
+  bool credentialsPathExplicit = false;
   std::string storePath;
   std::string backupDir;
   bool syncOnly = false;
@@ -80,10 +84,29 @@ struct Options {
 
 json readJson(const std::string& path);                     // throws on missing/invalid
 json readJsonIfExists(const std::string& path, json fallback);
+// mode: the permissions the file must end up with; 0 means "inherit the
+// existing file's mode, else the umask default".
 void writeJsonAtomic(const std::string& path, const json& value, int mode /*0=default*/);
+void writeTextAtomic(const std::string& path, const std::string& payload, int mode);
 void backupFile(const std::string& path, const std::string& backupDir);
+// Keeps the newest 3 "<base>.<stamp>.bak" files in backupDir.
+void pruneBackups(const std::string& backupDir, const std::string& base);
 void writeLiveState(const json& config, const json& credentials, const Options& o);
 void writeStore(const json& store, const Options& o);
+
+// ---------------------------------------------------------------------------
+// creds.cpp — live credential storage. Claude Code keeps claudeAiOauth in
+// ~/.claude/.credentials.json on Linux but in the login Keychain on macOS, so
+// reads and writes go through this backend instead of touching the path
+// directly.
+// ---------------------------------------------------------------------------
+bool credentialsUseKeychain(const Options& o);
+// Throws when the live credentials cannot be read (missing/invalid/denied);
+// the message names the location, so callers need not.
+json readLiveCredentials(const Options& o);
+// Backs up the current value, then writes claudeAiOauth while preserving any
+// sibling keys Claude Code owns.
+void writeLiveCredentials(const json& credentials, const Options& o);
 
 json readSettings();
 void writeSettings(const json& settings);

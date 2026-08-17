@@ -9,13 +9,36 @@
 #include <sys/stat.h>
 #include <unistd.h>
 
+#ifdef __APPLE__
+#include <climits>
+#include <mach-o/dyld.h>
+#include <vector>
+#endif
+
 namespace fs = std::filesystem;
 
 static std::string selfExePath() {
   std::error_code ec;
+#ifdef __APPLE__
+  // macOS has no /proc. _NSGetExecutablePath fills the buffer and returns 0, or
+  // returns -1 and writes the required size back into the size argument; a NULL
+  // buffer is not part of that contract, so always pass real storage.
+  std::vector<char> buf(PATH_MAX, '\0');
+  uint32_t size = (uint32_t)buf.size();
+  if (_NSGetExecutablePath(buf.data(), &size) != 0) {
+    buf.assign(size + 1, '\0');
+    size = (uint32_t)buf.size();
+    if (_NSGetExecutablePath(buf.data(), &size) != 0) return "";
+  }
+  // The result may be relative or contain symlinks (a ~/.local/bin/ccs link).
+  fs::path p = fs::canonical(fs::path(buf.data()), ec);
+  if (ec) return std::string(buf.data());
+  return p.string();
+#else
   fs::path p = fs::read_symlink("/proc/self/exe", ec);
   if (!ec) return p.string();
   return "";
+#endif
 }
 
 static std::string installRootDir() { return getToolConfigDir(); }

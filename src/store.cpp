@@ -37,16 +37,26 @@ json readJsonIfExists(const std::string& path, json fallback) {
 }
 
 void writeJsonAtomic(const std::string& path, const json& value, int mode) {
+  writeTextAtomic(path, value.dump(2) + "\n", mode);
+}
+
+void writeTextAtomic(const std::string& path, const std::string& payload, int mode) {
   ensureDir(dirName(path));
-  std::string payload = value.dump(2) + "\n";
 
   // A rename transfers the temp file's mode onto the target, so the temp file
-  // must inherit the target's permissions (0600 on POSIX credentials files) or
-  // they would be silently widened to the umask default.
+  // must already carry the permissions the target should end up with.
+  //
+  // An explicit mode is a requirement, not a hint: the credentials file and the
+  // store both hold plaintext access/refresh tokens, so they must never be
+  // group- or world-readable. It therefore overrides whatever is on disk, which
+  // is what tightens a store file an older version left at 0644.
+  //
+  // mode == 0 means "no opinion" — inherit the existing file's permissions so a
+  // rewrite of a file this tool does not own (~/.claude.json) never widens them.
   int effectiveMode = mode;
-  struct stat st{};
-  if (stat(path.c_str(), &st) == 0) {
-    effectiveMode = st.st_mode & 0777;
+  if (mode == 0) {
+    struct stat st{};
+    if (stat(path.c_str(), &st) == 0) effectiveMode = st.st_mode & 0777;
   }
 
   std::string tempPath = path + "." + std::to_string((long)getpid()) + "." +
@@ -79,16 +89,10 @@ void writeJsonAtomic(const std::string& path, const json& value, int mode) {
   }
 }
 
-void backupFile(const std::string& path, const std::string& backupDir) {
-  if (!pathExists(path)) return;
-  ensureDir(backupDir);
-  std::string base = baseName(path);
-  std::string dest = pathJoin(backupDir, base + "." + backupTimestamp() + ".bak");
+// Retention is per source file: the backup dir is shared, so a global keep-3
+// would let one file's backups evict another's within one switch.
+void pruneBackups(const std::string& backupDir, const std::string& base) {
   std::error_code ec;
-  fs::copy_file(path, dest, fs::copy_options::overwrite_existing, ec);
-
-  // Retention is per source file: the backup dir is shared, so a global keep-3
-  // would let one file's backups evict another's within one switch.
   std::vector<std::string> backups;
   for (auto& e : fs::directory_iterator(backupDir, ec)) {
     std::string name = e.path().filename().string();
@@ -104,37 +108,36 @@ void backupFile(const std::string& path, const std::string& backupDir) {
   }
 }
 
-// Only claudeAiOauth belongs to this tool; sibling keys Claude Code may add to
-// .credentials.json must survive a switch.
-static void mergeCredentialsWrite(const std::string& credentialsPath, const json& credentials) {
-  json existing;
-  bool haveExisting = false;
-  try {
-    existing = readJsonIfExists(credentialsPath, json());
-    haveExisting = existing.is_object();
-  } catch (...) {
-    haveExisting = false;
-  }
-  json next;
-  if (haveExisting) {
-    next = existing;
-    next["claudeAiOauth"] = credentials.contains("claudeAiOauth") ? credentials["claudeAiOauth"] : json();
-  } else {
-    next = credentials;
-  }
-  writeJsonAtomic(credentialsPath, next, 0600);
+void backupFile(const std::string& path, const std::string& backupDir) {
+  if (!pathExists(path)) return;
+  ensureDir(backupDir);
+  std::string base = baseName(path);
+  std::string dest = pathJoin(backupDir, base + "." + backupTimestamp() + ".bak");
+  std::error_code ec;
+  fs::copy_file(path, dest, fs::copy_options::overwrite_existing, ec);
+  pruneBackups(backupDir, base);
 }
 
 void writeLiveState(const json& config, const json& credentials, const Options& o) {
   backupFile(o.configPath, o.backupDir);
-  backupFile(o.credentialsPath, o.backupDir);
+
+  // Credentials go first, because that is the write that realistically fails:
+  // on macOS it is a Keychain modify, which the user can deny even after
+  // allowing the read. Throwing here leaves the live pair untouched and
+  // consistent. Doing it the other way round would leave ~/.claude.json naming
+  // the new account while the old account's tokens are still live, so Claude
+  // Code would show one identity and authenticate as another.
+  //
+  // Backend-specific: a file on Linux, the login Keychain on macOS. Backs up the
+  // previous value itself.
+  writeLiveCredentials(credentials, o);
   writeJsonAtomic(o.configPath, config, 0);
-  mergeCredentialsWrite(o.credentialsPath, credentials);
 }
 
 void writeStore(const json& store, const Options& o) {
   backupFile(o.storePath, o.backupDir);
-  writeJsonAtomic(o.storePath, store, 0);
+  // 0600: the store holds every account's access and refresh tokens in cleartext.
+  writeJsonAtomic(o.storePath, store, 0600);
 }
 
 // --------------------------- tool settings ---------------------------------

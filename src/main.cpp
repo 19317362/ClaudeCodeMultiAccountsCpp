@@ -52,7 +52,15 @@ static Options parseArgs(const std::vector<std::string>& argv) {
     std::string cur = argv[i++];
     if (cur == "--usage-command") { options.usageCommand = next(options.usageCommand); continue; }
     if (cur == "--config") { options.configPath = next(options.configPath); continue; }
-    if (cur == "--credentials") { options.credentialsPath = next(options.credentialsPath); continue; }
+    if (cur == "--credentials") {
+      // Only a flag that actually named a path selects the file backend: a
+      // trailing "--credentials" consumes nothing, and forcing the file backend
+      // onto the default path would fail on macOS, where that file never exists.
+      bool hasValue = i < argv.size();
+      options.credentialsPath = next(options.credentialsPath);
+      if (hasValue) options.credentialsPathExplicit = true;
+      continue;
+    }
     if (cur == "--store") { options.storePath = next(options.storePath); continue; }
     if (cur == "--backup-dir") { options.backupDir = next(options.backupDir); continue; }
     if (cur == "--sync" || cur == "sync") { options.syncOnly = true; continue; }

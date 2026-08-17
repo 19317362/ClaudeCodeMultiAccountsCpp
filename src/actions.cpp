@@ -220,7 +220,7 @@ int runMainFlow(Options& options) {
   if (options.handled) return 0;
   try {
     json config = readJson(options.configPath);
-    json credentials = readJson(options.credentialsPath);
+    json credentials = readLiveCredentials(options);
     json existingStore =
         normalizeStore(readJsonIfExists(options.storePath, json{{"version", STORE_VERSION},
                                                                 {"accounts", json::array()}}),

@@ -35,4 +35,10 @@ target("ccs")
     if is_plat("linux") then
         add_syslinks("pthread", "dl")
     end
+    if is_plat("macosx") then
+        -- Security/CoreFoundation: reading and writing the Claude Code OAuth blob
+        -- in the login Keychain, which is where macOS keeps it instead of
+        -- ~/.claude/.credentials.json (see src/creds.cpp).
+        add_frameworks("Security", "CoreFoundation")
+    end
 target_end()
