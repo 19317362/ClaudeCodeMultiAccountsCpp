@@ -53,7 +53,9 @@ JSON(`{"claudeAiOauth": {...}}`)存进 login Keychain 的一条 generic password
 service 名为 `Claude Code-credentials`。因此 `ccs` 在 macOS 上通过
 Security framework 读写 Keychain(见 `src/creds.cpp`),其余逻辑与 Linux 完全一致。
 
-- 首次读写 Keychain 时,macOS 可能弹窗要求授权;选 **总是允许** 即可免除后续提示。
+- 首次读写 Keychain 时,macOS 可能弹窗要求授权。若点了**始终允许**仍反复弹窗,
+  是条目的 partition list 只含 ccs 自己、而 `change_acl` 又为空导致授权写不回去,
+  跑 `./scripts/fix-keychain-acl.sh` 修正;详见 [KEYCHAIN_ACL_FIX.md](KEYCHAIN_ACL_FIX.md)。
 - 切换前会把 Keychain 里的旧值快照到
   `~/.claude/backups/multi-account-switch/.credentials.keychain.json.<时间戳>.bak`(0600),
   与 Linux 备份 `.credentials.json` 的行为对等。
@@ -198,6 +200,12 @@ Run ccs --remove <index> to remove a stored account.
 | `src/actions.cpp` | list/switch/sync/usage/remove/rename 主流程、进程检测 |
 | `src/install.cpp` | install / uninstall / session-start / statusline |
 | `src/main.cpp` | 参数解析与分发 |
+
+辅助脚本:
+
+| 文件 | 职责 |
+| --- | --- |
+| `scripts/fix-keychain-acl.sh` | macOS:修正 Keychain 条目 partition list,消除反复弹窗 |
 
 ## 说明
 
